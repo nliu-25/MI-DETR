@@ -1,0 +1,12 @@
+# Default dataset template for MI-DETR.
+# Recommended usage:
+#   python train.py --data data.yaml --dataset-root /path/to/DAUB-R_retina --device 0
+# If --dataset-root is not provided, the relative path below is resolved from the location of this file.
+path: ./datasets/DAUB-R_retina
+
+train: images/train
+val: images/test
+test:
+
+names:
+  0: target

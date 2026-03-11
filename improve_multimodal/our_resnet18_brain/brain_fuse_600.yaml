@@ -1,0 +1,81 @@
+# Ultralytics YOLO / RT-DETR-ResNet18 (mid)
+# Dual-branch backbone; P3 performs bidirectional interaction first, then each branch extracts P4/P5, with concat at P3/P4/P5.
+# Interaction module: TransformerFusionBlock (example args [128, 20, 20])
+
+# ===== Params =====
+ch: 6          # e.g. appearance(3) + motion(3)
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+# ===== Backbone =====
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, IN, []]  # 0
+  - [-1, 1, Multiin, [1]]  # 1 RGB Branch
+  - [-2, 1, Multiin, [2]]  # 2 Infrared Branch
+  # ---- Branch A: stem -> P2A -> P3A ----
+  - [1,  1, ConvNormLayer, [32, 3, 2, 1, 'relu']]     # 3: P1A
+  - [3,  1, ConvNormLayer, [32, 3, 1, 1, 'relu']]     # 4
+  - [4,  1, ConvNormLayer, [64, 3, 1, 1, 'relu']]     # 5
+  - [5,  1, nn.MaxPool2d, [3, 2, 1]]                  # 6: P2A
+  - [6,  2, Blocks, [64,  BasicBlock, 2, False]]      # 7
+  - [7,  2, Blocks, [128, BasicBlock, 3, False]]      # 8: P3A (before interaction)
+
+  # ---- Branch B: stem -> P2B -> P3B ----
+  - [2,  1, ConvNormLayer, [32, 3, 2, 1, 'relu']]     # 9: P1B
+  - [9,  1, ConvNormLayer, [32, 3, 1, 1, 'relu']]     # 10
+  - [10, 1, ConvNormLayer, [64, 3, 1, 1, 'relu']]     # 11
+  - [11, 1, nn.MaxPool2d, [3, 2, 1]]                  # 12: P2B
+  - [12, 2, Blocks, [64,  BasicBlock, 2, False]]      # 13
+  - [13, 2, Blocks, [128, BasicBlock, 3, False]]      # 14: P3B (before interaction)
+
+  # ---- Bidirectional P3 interaction (producing hat_p3_a / hat_p3_b) ----
+  - [[8, 14], 1, TransformerFusionBlock, [128, 20, 20]]  # 15: hat_p3_a (A <- B)
+  - [[14, 8], 1, TransformerFusionBlock, [128, 20, 20]]  # 16: hat_p3_b (B <- A)
+
+  # ---- Continue from hat_p3_* to extract P4 for each branch, then concat ----
+  - [15, 2, Blocks, [256, BasicBlock, 4, False]]      # 17: hat_p4_a (from 15)
+  - [16, 2, Blocks, [256, BasicBlock, 4, False]]      # 18: hat_p4_b (from 16)
+  - [[17, 18], 1, Concat, [1]]                        # 19: cat P4 = hat_p4_a ⊕ hat_p4_b
+
+  # ---- Continue from hat_p4_* to extract P5 for each branch, then concat ----
+  - [17, 2, Blocks, [512, BasicBlock, 5, False]]      # 20: hat_p5_a (from 17)
+  - [18, 2, Blocks, [512, BasicBlock, 5, False]]      # 21: hat_p5_b (from 18)
+  - [[20, 21], 1, Concat, [1]]                        # 22: cat P5 = hat_p5_a ⊕ hat_p5_b
+
+  # ---- Concat P3 as the lowest-level fused feature ----
+  - [[15, 16], 1, Concat, [1]]                        # 23: cat P3 = hat_p3_a ⊕ hat_p3_b
+
+# ===== Head / FPN-PAN-Decoder =====
+head:
+  # ---- Top-down: P5 -> P4 -> P3 ----
+  # Y5 path (from concatenated P5)
+  - [22, 1, Conv, [256, 1, 1, None, 1, 1, False]]     # 24: input_proj.2
+  - [24, 1, AIFI, [1024, 8]]                          # 25
+  - [25, 1, Conv, [256, 1, 1]]                        # 26: Y5 lateral_convs.0
+
+  # Upsample and fuse with concatenated P4
+  - [26, 1, nn.Upsample, [None, 2, 'nearest']]        # 27
+  - [19, 1, Conv, [256, 1, 1, None, 1, 1, False]]     # 28: input_proj.1 (cat P4)
+  - [[27, 28], 1, Concat, [1]]                        # 29
+  - [29, 3, RepC3, [256, 0.5]]                        # 30: fpn_blocks.0
+  - [30, 1, Conv, [256, 1, 1]]                        # 31: Y4 lateral_convs.1
+
+  # Upsample and fuse with concatenated P3 (producing X3)
+  - [31, 1, nn.Upsample, [None, 2, 'nearest']]        # 32
+  - [23, 1, Conv, [256, 1, 1, None, 1, 1, False]]     # 33: input_proj.0 (cat P3)
+  - [[32, 33], 1, Concat, [1]]                        # 34
+  - [34, 3, RepC3, [256, 0.5]]                        # 35: X3 / fpn_blocks.1
+
+  # ---- Bottom-up PAN: X3 -> F4 -> F5 ----
+  - [35, 1, Conv, [256, 3, 2]]                        # 36: downsample_convs.0
+  - [[36, 31], 1, Concat, [1]]                        # 37: fuse with Y4
+  - [37, 3, RepC3, [256, 0.5]]                        # 38: F4 / pan_blocks.0
+
+  - [38, 1, Conv, [256, 3, 2]]                        # 39: downsample_convs.1
+  - [[39, 26], 1, Concat, [1]]                        # 40: fuse with Y5
+  - [40, 3, RepC3, [256, 0.5]]                        # 41: F5 / pan_blocks.1
+
+  # ---- Detection head: detect on three scales (P3, P4, P5) ----
+  - [[35, 38, 41], 1, RTDETRDecoder, [nc, 256, 600, 4, 8, 3]]  # 42
