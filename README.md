@@ -25,7 +25,6 @@ The motion representation depends on temporal history, with one newly acquired f
 ## Paper and Version Information
 
 - The description and abstract above correspond to the revised manuscript targeting **TIP**.
-- The [earlier arXiv preprint (v1)](https://arxiv.org/abs/2603.05071v1) uses the title *MI-DETR: A Strong Baseline for Moving Infrared Small Target Detection with Bio-Inspired Motion Integration* and earlier method terminology. Its bibliographic record is retained in the [citation](#citation).
 - Existing download names such as `Dataset_retina` and directory examples ending in `_retina` are retained for compatibility with the available files. They are not new TIP-specific dataset or checkpoint releases.
 
 ## Model Summary
@@ -227,19 +226,3 @@ This documentation update aligns the project description with the revised manusc
 ## License
 
 This repository contains a modified Ultralytics-based implementation. To stay consistent with the upstream licensing basis, this repository is released under **AGPL-3.0**. See [LICENSE](./LICENSE) for details.
-
-## Citation
-
-The currently available preprint can be cited using the record below. This entry refers to the earlier arXiv version; it is not a TIP publication record.
-
-```bibtex
-@misc{liu2026midetrstrongbaselinemoving,
-      title={MI-DETR: A Strong Baseline for Moving Infrared Small Target Detection with Bio-Inspired Motion Integration},
-      author={Nian Liu and Jin Gao and Shubo Lin and Yutong Kou and Sikui Zhang and Fudong Ge and Zhiqiang Pu and Liang Li and Gang Wang and Yizheng Wang and Weiming Hu},
-      year={2026},
-      eprint={2603.05071},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2603.05071},
-}
-```
