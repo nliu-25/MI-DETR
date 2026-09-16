@@ -1,38 +1,36 @@
 # MI-DETR
 
-Official code release for **MI-DETR: A Strong Baseline for Moving Infrared Small Target Detection with Bio-Inspired Motion Integration**.
+Official repository for **Motion Integration DETR (MI-DETR)**, a framework for moving infrared small target detection with explicit motion modeling and appearance–motion interaction.
 
-This repository is organized for public release alongside the paper. It keeps the core training and validation pipeline used in the paper while removing local machine paths, private runtime artifacts, cached files, and large binary files that should not be uploaded to GitHub. The repository does not include raw datasets, retina-processed datasets, or large pretrained checkpoints. It only provides code, configuration files, and download instructions.
+**Target journal:** IEEE Transactions on Image Processing (TIP).
 
-## Paper
+This README follows the revised manuscript terminology: **Recurrent Interpretable Motion Cue Aggregation (RIMCA)** and **Pathway Mutual Interaction (PMI)**. The repository provides the detector implementation, model configurations, training and validation entry points, and dataset/checkpoint download instructions.
 
-- Title: *MI-DETR: A Strong Baseline for Moving Infrared Small Target Detection with Bio-Inspired Motion Integration*
-- arXiv: <https://arxiv.org/abs/2603.05071>
+## Abstract
 
-```bibtex
-@misc{liu2026midetrstrongbaselinemoving,
-      title={MI-DETR: A Strong Baseline for Moving Infrared Small Target Detection with Bio-Inspired Motion Integration},
-      author={Nian Liu and Jin Gao and Shubo Lin and Yutong Kou and Sikui Zhang and Fudong Ge and Zhiqiang Pu and Liang Li and Gang Wang and Yizheng Wang and Weiming Hu},
-      year={2026},
-      eprint={2603.05071},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2603.05071},
-}
-```
+Detecting moving infrared small targets is challenging because tiny, low-contrast targets occupy few pixels and are easily obscured by dynamic backgrounds. Existing multi-frame methods aggregate temporal information across frames to capture motion. However, dynamic background changes can generate similar motion cues, making it difficult to distinguish between target motion and background interference. Furthermore, even when motion cues are extracted, combining them with current-frame appearance features remains difficult. To address these issues, we propose Motion Integration DETR (MI-DETR), a three-stage framework that explicitly models motion and fuses it with appearance features. First, to suppress background clutter while preserving target-related motion cues, Recurrent Interpretable Motion Cue Aggregation (RIMCA) maintains a recurrent temporal state that accumulates motion across consecutive frames, producing a causal and spatially aligned motion representation. Second, to integrate spatial and temporal information, Pathway Mutual Interaction (PMI) preserves separate appearance and motion pathways while enabling bidirectional feature exchange between them. Finally, an RT-DETR-based detector uses these refined features for end-to-end target localization. Experiments on DAUB-R, ITSDT-15K, and IRDST-H show that explicit motion modeling and pathway interaction effectively improve moving infrared small target detection.
+
+Our code is available at [github.com/nliu-25/MI-DETR](https://github.com/nliu-25/MI-DETR). A LaTeX version of this abstract is provided in [docs/abstract.tex](./docs/abstract.tex).
 
 ## Overview
 
-MI-DETR is a dual-branch multimodal detector for moving infrared small target detection, built on RT-DETR. This public release focuses on the following:
+MI-DETR has three stages:
 
-- keeping the paper-consistent model structure, training settings, and validation workflow
-- supporting both single-GPU and multi-GPU training
-- providing a clean repository layout for reproduction
-- documenting environment setup, dataset preparation, training, and validation
+1. **RIMCA — motion representation.** A recurrent temporal state aggregates motion across consecutive frames to produce a causal motion representation aligned with the current appearance image.
+2. **PMI — pathway interaction.** Separate appearance and motion pathways exchange features bidirectionally.
+3. **RT-DETR-based detection.** The refined features support end-to-end target localization.
+
+The motion representation depends on temporal history, with one newly acquired frame at each step. In this code snapshot, training and validation load **precomputed motion maps**; they do not run RIMCA online. A standalone RIMCA preprocessing entry point is not included in this snapshot.
+
+## Paper and Version Information
+
+- The description and abstract above correspond to the revised manuscript targeting **TIP**.
+- The [earlier arXiv preprint (v1)](https://arxiv.org/abs/2603.05071v1) uses the title *MI-DETR: A Strong Baseline for Moving Infrared Small Target Detection with Bio-Inspired Motion Integration* and earlier method terminology. Its bibliographic record is retained in the [citation](#citation).
+- Existing download names such as `Dataset_retina` and directory examples ending in `_retina` are retained for compatibility with the available files. They are not new TIP-specific dataset or checkpoint releases.
 
 ## Model Summary
 
-The default model configuration is located at `improve_multimodal/our_resnet18_brain/brain_fuse.yaml`.
+The default model configuration is [brain_fuse.yaml](./improve_multimodal/our_resnet18_brain/brain_fuse.yaml), which uses **300 object queries**. A separate [brain_fuse_400.yaml](./improve_multimodal/our_resnet18_brain/brain_fuse_400.yaml) is also provided. Choose the configuration associated with the experiment being reproduced; the default alone does not establish a match to a manuscript result.
 
 Key points:
 
@@ -42,7 +40,7 @@ Key points:
 - During data loading, each file under `images/...` is paired with the file of the same name under `image/...`.
 - The loader concatenates the paired motion and appearance inputs to form the 6-channel input used by the model.
 - The backbone is a dual-branch architecture with appearance and motion streams.
-- A bidirectional cross-modal interaction block `TransformerFusionBlock` is inserted at the P3 stage.
+- PMI is implemented at P3 using two independent `TransformerFusionBlock` instances with reversed pathway inputs. P4 and P5 are subsequently extracted from the two P3 outputs.
 - The fused multi-scale features are finally fed into the RT-DETR decoder.
 
 ## Repository Structure
@@ -52,6 +50,7 @@ MI-DETR/
 ├── checkpoints/                  # checkpoint placeholder and usage notes
 ├── datasets/                     # dataset placeholder and layout notes
 ├── docs/
+│   ├── abstract.tex              # revised manuscript abstract
 │   └── DOWNLOADS.md              # dataset and checkpoint download instructions
 ├── improve_multimodal/
 │   └── our_resnet18_brain/
@@ -86,9 +85,9 @@ Please refer to the MoPKL repository for the download links of the original DAUB
 
 - <https://github.com/UESTC-nnLab/MoPKL>
 
-### 2. Retina-Processed Datasets and Checkpoints
+### 2. Precomputed Motion Maps and Checkpoints
 
-For paper reproduction, we recommend using the retina-processed datasets and the released checkpoints.
+The existing download bundle provides paired appearance images, precomputed motion maps, and checkpoints. Its original file name is retained:
 
 - File name: `Dataset_retina`
 - Baidu Netdisk: <https://pan.baidu.com/s/1p5409A7rldXrFzzcwC_ALQ?pwd=5paw>
@@ -121,7 +120,7 @@ Important notes:
 - File names under `images/` and `image/` must be strictly aligned one by one.
 - The loader maps `images/.../xxx.png` to `image/.../xxx.png` automatically.
 - Labels follow the standard YOLO detection format.
-- The default `data.yaml` uses `images/test` as the validation split.
+- The bundled `data.yaml` retains the legacy mapping `val: images/test`, with no separate `test` entry. For new experiments, create a dataset YAML with independent training, validation, and test splits. Use validation data for checkpoint selection and evaluate the frozen checkpoint on test data.
 
 ### 4. How to Use `data.yaml`
 
@@ -136,7 +135,7 @@ Example:
 python train.py --data data.yaml --dataset-root /path/to/DAUB-R_retina --device 0
 ```
 
-To reproduce ITSDT-15K or IRDST-H, switch `--dataset-root` to the corresponding retina-processed dataset. If your local split names differ from the default template, copy and edit `data.yaml` accordingly.
+For ITSDT-15K or IRDST-H, switch `--dataset-root` to the corresponding paired dataset. Copy and edit `data.yaml` to match the actual split definitions; changing the dataset root does not change the split mapping.
 
 ## Training
 
@@ -198,14 +197,16 @@ For other datasets, switch:
 
 ## Reproducibility Notes
 
-To stay close to the paper setting:
+For a traceable experiment:
 
-- use the retina-processed datasets
+- record the dataset version, motion-map generation procedure, frame order, and sequence reset boundaries
 - keep `images/` as the appearance modality and `image/` as the motion modality
 - keep strict one-to-one pairing between the two modality folders
-- use the default model config `improve_multimodal/our_resnet18_brain/brain_fuse.yaml`
-- keep `imgsz=512`, `epochs=600`, and `optimizer=AdamW`
-- validate with the released checkpoint or the `best.pt` obtained from training
+- record the exact model configuration, training arguments, code revision, and checkpoint hash
+- use the image size and evaluation protocol associated with the result being reproduced
+- use an independent validation split to select `best.pt` before final test evaluation
+
+The revised terminology does not establish that existing checkpoints or precomputed motion maps reproduce every revised-manuscript experiment. Detector timing from the provided validation path excludes online motion-map generation and should not be reported as full video-to-detection throughput.
 
 By default, outputs are saved to:
 
@@ -219,7 +220,9 @@ This public repository has been cleaned up to:
 - remove local absolute paths
 - unify training and validation entry points
 - remove caches, zip files, temporary runtime results, and large checkpoint files
-- keep the core code path required for paper reproduction
+- provide the detector training and validation code with paired appearance/motion inputs
+
+This documentation update aligns the project description with the revised manuscript. It does not change the detector, regenerate motion maps, or introduce new experimental results.
 
 ## License
 
@@ -227,7 +230,7 @@ This repository contains a modified Ultralytics-based implementation. To stay co
 
 ## Citation
 
-If you find this repository useful, please cite:
+The currently available preprint can be cited using the record below. This entry refers to the earlier arXiv version; it is not a TIP publication record.
 
 ```bibtex
 @misc{liu2026midetrstrongbaselinemoving,
